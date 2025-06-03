@@ -1,11 +1,11 @@
 import React from 'react';
 import { Calendar, Users, DollarSign, Scissors } from 'lucide-react';
-import { Appointment, Client, Service } from '../../types';
+import { Appointment, Client, Service } from '../../types'; // Types are fine
 
 interface DashboardStatsProps {
-  appointments: Appointment[];
+  appointments: Appointment[]; // These appointments will have nested client/service/employee data
   clients: Client[];
-  services: Service[];
+  services: Service[]; // This is the full list of services from the DB
   currentDate: Date;
 }
 
@@ -15,38 +15,43 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
   services,
   currentDate
 }) => {
-  const todayAppointments = appointments.filter(
-    app => new Date(app.date).toDateString() === currentDate.toDateString()
-  );
+  // Filter appointments for today
+  const todayAppointments = appointments.filter(app => {
+    const appDate = new Date(app.appointment_time); // Use appointment_time
+    return appDate.toDateString() === currentDate.toDateString();
+  });
   
+  // Filter completed appointments for today
   const completedTodayAppointments = todayAppointments.filter(
     app => app.status === 'completed'
   );
   
+  // Calculate daily revenue from completed appointments today
   const calculateDailyRevenue = () => {
     return completedTodayAppointments.reduce((total, app) => {
-      const service = services.find(s => s.id === app.serviceId);
-      if (service) {
-        const price = service.promotional?.isActive 
-          ? service.promotional.discountedPrice 
-          : service.price;
-        return total + price;
+      // Access nested service and its price directly
+      if (app.services && typeof app.services.price === 'number') {
+        return total + app.services.price;
       }
       return total;
     }, 0);
   };
+
+  // Count active services
+  const activeServicesCount = services.filter(service => service.is_active).length;
 
   const stats = [
     {
       name: 'Agendamentos Hoje',
       value: todayAppointments.length,
       icon: <Calendar className="h-6 w-6 text-blue-600" />,
+      // "change" is mock, will leave as is
       change: '+5%',
       changeType: 'increase',
     },
     {
       name: 'Total de Clientes',
-      value: clients.length,
+      value: clients.length, // This is total clients from the clients prop
       icon: <Users className="h-6 w-6 text-orange-500" />,
       change: '+12%',
       changeType: 'increase',
@@ -60,10 +65,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
     },
     {
       name: 'Serviços Ativos',
-      value: services.length,
+      value: activeServicesCount, // Use the count of active services
       icon: <Scissors className="h-6 w-6 text-purple-500" />,
-      change: '0%',
-      changeType: 'none',
+      change: '', // No change metric for this one or could be calculated if historical data existed
+      changeType: 'none', // Or remove change display
     },
   ];
 

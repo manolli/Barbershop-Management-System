@@ -1,39 +1,126 @@
-import React, { useState } from 'react';
-import { Plus, Search, Calendar as CalendarIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, Calendar as CalendarIcon, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { mockAppointments, mockClients, mockEmployees, mockServices } from '../data/mockData';
-import { formatDateTime } from '../utils/dateUtils';
+import { supabase } from '../../lib/supabaseClient';
+import { Appointment, Client, Employee, Service } from '../../types'; // Ensure these types can handle nullable nested objects
+import { formatDateTime, formatDate } from '../utils/dateUtils'; // formatDateTime might need adjustment for string dates from Supabase
+
+// Helper function to get the start and end of a given date string (YYYY-MM-DD)
+const getDayRange = (dateStr: string) => {
+  const startDate = new Date(dateStr + 'T00:00:00.000Z'); // Start of day in UTC
+  const endDate = new Date(dateStr + 'T23:59:59.999Z'); // End of day in UTC
+  return { startDate, endDate };
+};
+
 
 const Appointments: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    new Date().toISOString().split('T')[0] // Default to today in YYYY-MM-DD format
   );
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredAppointments = mockAppointments
-    .filter(appointment => {
-      const appointmentDate = new Date(appointment.date);
-      const filterDate = new Date(selectedDate);
-      
-      return (
-        appointmentDate.getDate() === filterDate.getDate() &&
-        appointmentDate.getMonth() === filterDate.getMonth() &&
-        appointmentDate.getFullYear() === filterDate.getFullYear()
-      );
-    })
-    .filter(appointment => {
-      const client = mockClients.find(c => c.id === appointment.clientId);
-      const employee = mockEmployees.find(e => e.id === appointment.employeeId);
-      const service = mockServices.find(s => s.id === appointment.serviceId);
-      
-      return (
-        !searchTerm ||
-        client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        service?.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const fetchAppointments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { startDate, endDate } = getDayRange(selectedDate);
+
+      const { data, error: supabaseError } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          clients (id, name, phone),
+          employees (id, name),
+          services (id, name, duration_minutes)
+        `)
+        .gte('appointment_time', startDate.toISOString())
+        .lte('appointment_time', endDate.toISOString())
+        .order('appointment_time', { ascending: true });
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+      // Make sure nested objects are correctly typed, they might be null if FK is null
+      setAppointments(data as Appointment[] || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch appointments.');
+      console.error('Error fetching appointments:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  const filteredAppointments = appointments.filter(appointment => {
+    const clientName = appointment.clients?.name || '';
+    const employeeName = appointment.employees?.name || '';
+    const serviceName = appointment.services?.name || '';
+
+    return (
+      !searchTerm ||
+      clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      serviceName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
+  // TODO: Implement Add New Appointment functionality
+  const handleAddNewAppointment = () => {
+    console.log("Add new appointment clicked");
+  };
+
+  // TODO: Implement Edit Appointment functionality
+  const handleEditAppointment = (appointment: Appointment) => {
+    console.log("Edit appointment:", appointment);
+  };
+
+  // TODO: Implement Delete Appointment functionality
+  const handleDeleteAppointment = async (appointmentId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este agendamento?')) {
+      try {
+        const { error: supabaseError } = await supabase
+          .from('appointments')
+          .delete()
+          .match({ id: appointmentId });
+
+        if (supabaseError) throw supabaseError;
+        setAppointments(prev => prev.filter(app => app.id !== appointmentId));
+      } catch (err: any) {
+        setError(err.message || 'Falha ao excluir agendamento.');
+        console.error('Error deleting appointment:', err);
+      }
+    }
+  };
+
+
+  const getStatusClass = (status?: Appointment['status']) => {
+    switch (status) {
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'no-show': return 'bg-yellow-100 text-yellow-800';
+      case 'scheduled':
+      default:
+        return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  const getStatusText = (status?: Appointment['status']) => {
+    switch (status) {
+      case 'completed': return 'Concluído';
+      case 'cancelled': return 'Cancelado';
+      case 'no-show': return 'Não Compareceu';
+      case 'scheduled':
+      default:
+        return 'Agendado';
+    }
+  };
+
 
   return (
     <MainLayout>
@@ -42,19 +129,29 @@ const Appointments: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Agendamentos</h1>
           <p className="text-gray-600">Gerencie os agendamentos</p>
         </div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
+        <button
+          onClick={handleAddNewAppointment}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"
+        >
           <Plus className="h-5 w-5 mr-2" />
           Novo Agendamento
         </button>
       </div>
 
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-4 items-center">
+          <div className="relative flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
               type="text"
-              placeholder="Buscar agendamentos..."
+              placeholder="Buscar por cliente, profissional ou serviço..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
