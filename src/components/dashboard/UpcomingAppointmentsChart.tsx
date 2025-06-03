@@ -20,7 +20,7 @@ const UpcomingAppointmentsChart: React.FC<UpcomingAppointmentsChartProps> = ({ a
       
       // Count appointments for this day
       const dayCount = appointments.filter(app => {
-        const appDate = new Date(app.date);
+        const appDate = new Date(app.appointment_time); // Changed app.date to app.appointment_time
         return (
           appDate.getDate() === date.getDate() &&
           appDate.getMonth() === date.getMonth() &&

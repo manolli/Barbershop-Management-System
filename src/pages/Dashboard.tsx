@@ -1,34 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainLayout from '../components/layout/MainLayout';
 import DashboardStats from '../components/dashboard/DashboardStats';
 import AppointmentsList from '../components/dashboard/AppointmentsList';
 import UpcomingAppointmentsChart from '../components/dashboard/UpcomingAppointmentsChart';
 import ServicePerformanceChart from '../components/dashboard/ServicePerformanceChart';
-import { mockAppointments, mockClients, mockEmployees, mockServices } from '../data/mockData';
+import { supabase } from '../../lib/supabaseClient';
+import { Appointment, Client, Employee, Service } from '../../types';
 import { formatDate } from '../utils/dateUtils';
+import { AlertCircle } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const [currentDate] = useState(new Date());
+  const [todayAppointments, setTodayAppointments] = useState<Appointment[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]); // For charts and stats
+  const [clients, setClients] = useState<Client[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Today's date range
+        const todayStart = new Date(currentDate);
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(currentDate);
+        todayEnd.setHours(23, 59, 59, 999);
+
+        // Tomorrow's date start
+        const tomorrowStart = new Date(currentDate);
+        tomorrowStart.setDate(currentDate.getDate() + 1);
+        tomorrowStart.setHours(0, 0, 0, 0);
+
+        // Fetch all data in parallel
+        const [
+          appointmentsData,
+          clientsData,
+          employeesData,
+          servicesData
+        ] = await Promise.all([
+          supabase
+            .from('appointments')
+            .select('*, clients(*), employees(*), services(*)') // Fetch all related data
+            .order('appointment_time', { ascending: true }),
+          supabase.from('clients').select('*'),
+          supabase.from('employees').select('*'),
+          supabase.from('services').select('*')
+        ]);
+
+        if (appointmentsData.error) throw appointmentsData.error;
+        if (clientsData.error) throw clientsData.error;
+        if (employeesData.error) throw employeesData.error;
+        if (servicesData.error) throw servicesData.error;
+
+        const allFetchedAppointments = (appointmentsData.data as Appointment[]) || [];
+        setAllAppointments(allFetchedAppointments);
+        setClients((clientsData.data as Client[]) || []);
+        setEmployees((employeesData.data as Employee[]) || []);
+        setServices((servicesData.data as Service[]) || []);
+
+        // Filter for Today's Appointments
+        const todayApps = allFetchedAppointments.filter(app => {
+          const appDate = new Date(app.appointment_time);
+          return appDate >= todayStart && appDate <= todayEnd;
+        });
+        setTodayAppointments(todayApps);
+
+        // Filter for Upcoming Appointments (from tomorrow onwards, limit 5)
+        const upcomingApps = allFetchedAppointments
+          .filter(app => {
+            const appDate = new Date(app.appointment_time);
+            return appDate >= tomorrowStart && app.status === 'scheduled';
+          })
+          .slice(0, 5);
+        setUpcomingAppointments(upcomingApps);
+
+      } catch (err: any) {
+        setError(err.message || 'Failed to fetch dashboard data.');
+        console.error('Error fetching dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentDate]);
   
-  // Get today's appointments
-  const todayAppointments = mockAppointments.filter(
-    app => new Date(app.date).toDateString() === currentDate.toDateString()
-  ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  
-  // Get upcoming appointments (excluding today)
-  const upcomingAppointments = mockAppointments
-    .filter(app => {
-      const appDate = new Date(app.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const isAfterToday = appDate > today && appDate.toDateString() !== currentDate.toDateString();
-      const isScheduled = app.status === 'scheduled';
-      
-      return isAfterToday && isScheduled;
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 5); // Only show 5 upcoming appointments
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="p-6 text-center text-gray-500">Carregando dashboard...</div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="m-4 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2" />
+          <span>{error}</span>
+        </div>
+      </MainLayout>
+    );
+  }
   
   return (
     <MainLayout>
@@ -38,37 +117,39 @@ const Dashboard: React.FC = () => {
       </div>
       
       <DashboardStats 
-        appointments={mockAppointments} 
-        clients={mockClients} 
-        services={mockServices}
-        currentDate={currentDate}
+        appointments={allAppointments}
+        clients={clients}
+        services={services}
+        currentDate={currentDate} // Pass current date for filtering within DashboardStats if needed
       />
       
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AppointmentsList
           appointments={todayAppointments}
-          clients={mockClients}
-          employees={mockEmployees}
-          services={mockServices}
+          // No need to pass all clients, employees, services if Appointment type includes them
+          // clients={clients}
+          // employees={employees}
+          // services={services}
           title="Agendamentos de Hoje"
           emptyMessage="Não há agendamentos para hoje."
         />
         
         <AppointmentsList
           appointments={upcomingAppointments}
-          clients={mockClients}
-          employees={mockEmployees}
-          services={mockServices}
-          title="Próximos Agendamentos"
-          emptyMessage="Não há agendamentos futuros."
+          // clients={clients}
+          // employees={employees}
+          // services={services}
+          title="Próximos Agendamentos (Top 5)"
+          emptyMessage="Não há próximos agendamentos."
         />
       </div>
       
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <UpcomingAppointmentsChart appointments={mockAppointments} />
+        {/* UpcomingAppointmentsChart might need all appointments or a specific range */}
+        <UpcomingAppointmentsChart appointments={allAppointments} />
         <ServicePerformanceChart 
-          appointments={mockAppointments} 
-          services={mockServices} 
+          appointments={allAppointments}
+          services={services}
         />
       </div>
     </MainLayout>

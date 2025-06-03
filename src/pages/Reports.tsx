@@ -1,83 +1,129 @@
-import React, { useState } from 'react';
-import { BarChart, Calendar as CalendarIcon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BarChart, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { mockAppointments, mockServices, mockEmployees } from '../data/mockData';
+import { supabase } from '../../lib/supabaseClient';
+import { Appointment, Service, Employee } from '../../types';
+
+// Helper to ensure date objects are consistently handled for Supabase
+const getUtcDateString = (date: Date) => {
+  return date.toISOString();
+};
 
 const Reports: React.FC = () => {
-  const [startDate, setStartDate] = useState<string>(
-    new Date(new Date().setDate(1)).toISOString().split('T')[0]
-  );
-  const [endDate, setEndDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [startDate, setStartDate] = useState<string>(() => {
+    const date = new Date();
+    date.setDate(1); // First day of the current month
+    return date.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0]; // Today
+  });
 
-  const calculateMetrics = () => {
-    const filteredAppointments = mockAppointments.filter(appointment => {
-      const appointmentDate = new Date(appointment.date);
-      return (
-        appointmentDate >= new Date(startDate) &&
-        appointmentDate <= new Date(endDate)
-      );
-    });
+  const [appointmentsInRange, setAppointmentsInRange] = useState<Appointment[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const completedAppointments = filteredAppointments.filter(
+  const fetchReportData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rangeStart = new Date(startDate + 'T00:00:00.000Z');
+      const rangeEnd = new Date(endDate + 'T23:59:59.999Z');
+
+      const [appointmentsData, servicesData, employeesData] = await Promise.all([
+        supabase
+          .from('appointments')
+          .select('*, services(*), employees(*), clients(*)') // services and employees are crucial here
+          .gte('appointment_time', getUtcDateString(rangeStart))
+          .lte('appointment_time', getUtcDateString(rangeEnd)),
+        supabase.from('services').select('*'),
+        supabase.from('employees').select('*')
+      ]);
+
+      if (appointmentsData.error) throw appointmentsData.error;
+      if (servicesData.error) throw servicesData.error;
+      if (employeesData.error) throw employeesData.error;
+
+      setAppointmentsInRange((appointmentsData.data as Appointment[]) || []);
+      setAllServices((servicesData.data as Service[]) || []);
+      setAllEmployees((employeesData.data as Employee[]) || []);
+
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch report data.');
+      console.error('Error fetching report data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    fetchReportData();
+  }, [fetchReportData]);
+
+  const calculateMetrics = useCallback(() => {
+    if (loading || error) { // Don't calculate if loading or error
+        return {
+            totalAppointments: 0,
+            completedAppointmentsCount: 0,
+            totalRevenue: 0,
+            servicePerformance: [],
+            employeePerformance: []
+        };
+    }
+
+    const completedAppointments = appointmentsInRange.filter(
       app => app.status === 'completed'
     );
 
     const totalRevenue = completedAppointments.reduce((total, app) => {
-      const service = mockServices.find(s => s.id === app.serviceId);
-      if (service) {
-        return total + (service.promotional?.isActive 
-          ? service.promotional.discountedPrice 
-          : service.price);
-      }
-      return total;
+      // Use price from nested service data within the appointment
+      return total + (app.services?.price || 0);
     }, 0);
 
-    const servicePerformance = mockServices.map(service => {
+    const servicePerformance = allServices.map(service => {
       const serviceAppointments = completedAppointments.filter(
-        app => app.serviceId === service.id
+        app => app.service_id === service.id
       );
+      const serviceRevenue = serviceAppointments.reduce((total, app) => {
+        // Price from app.services is already known due to the filter above
+        return total + (app.services?.price || 0);
+      },0);
       return {
+        id: service.id, // Added for key prop
         name: service.name,
         count: serviceAppointments.length,
-        revenue: serviceAppointments.reduce((total, app) => {
-          return total + (service.promotional?.isActive 
-            ? service.promotional.discountedPrice 
-            : service.price);
-        }, 0)
+        revenue: serviceRevenue
       };
     }).sort((a, b) => b.count - a.count);
 
-    const employeePerformance = mockEmployees
-      .filter(emp => emp.role === 'barber')
+    const employeePerformance = allEmployees
+      .filter(emp => emp.job_title === 'barber') // Use job_title
       .map(employee => {
         const employeeAppointments = completedAppointments.filter(
-          app => app.employeeId === employee.id
+          app => app.employee_id === employee.id
         );
+        const employeeRevenue = employeeAppointments.reduce((total, app) => {
+            // Price from app.services is already known
+            return total + (app.services?.price || 0);
+        },0);
         return {
+          id: employee.id, // Added for key prop
           name: employee.name,
           count: employeeAppointments.length,
-          revenue: employeeAppointments.reduce((total, app) => {
-            const service = mockServices.find(s => s.id === app.serviceId);
-            if (service) {
-              return total + (service.promotional?.isActive 
-                ? service.promotional.discountedPrice 
-                : service.price);
-            }
-            return total;
-          }, 0)
+          revenue: employeeRevenue
         };
       }).sort((a, b) => b.count - a.count);
 
     return {
-      totalAppointments: filteredAppointments.length,
-      completedAppointments: completedAppointments.length,
+      totalAppointments: appointmentsInRange.length,
+      completedAppointmentsCount: completedAppointments.length,
       totalRevenue,
       servicePerformance,
       employeePerformance
     };
-  };
+  }, [appointmentsInRange, allServices, allEmployees, loading, error]);
 
   const metrics = calculateMetrics();
 
@@ -88,7 +134,14 @@ const Reports: React.FC = () => {
         <p className="text-gray-600">Análise de desempenho do negócio</p>
       </div>
 
-      <div className="mb-6 flex gap-4">
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
         <div className="relative">
           <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <input
