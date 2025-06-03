@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BarChart, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Appointment, Service, Employee } from '../../types';
 
 // Helper to ensure date objects are consistently handled for Supabase
@@ -176,7 +176,7 @@ const Reports: React.FC = () => {
             <BarChart className="h-8 w-8 text-green-600" />
             <h3 className="ml-3 text-lg font-medium text-gray-900">Agendamentos Concluídos</h3>
           </div>
-          <p className="mt-4 text-2xl font-semibold text-gray-900">{metrics.completedAppointments}</p>
+              <p className="mt-4 text-2xl font-semibold text-gray-900">{metrics.completedAppointmentsCount}</p>
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -186,7 +186,7 @@ const Reports: React.FC = () => {
           </div>
           <p className="mt-4 text-2xl font-semibold text-gray-900">
             {metrics.totalAppointments > 0
-              ? `${((metrics.completedAppointments / metrics.totalAppointments) * 100).toFixed(1)}%`
+                  ? `${((metrics.completedAppointmentsCount / metrics.totalAppointments) * 100).toFixed(1)}%`
               : '0%'}
           </p>
         </div>
@@ -206,8 +206,8 @@ const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Desempenho por Serviço</h3>
           <div className="space-y-4">
-            {metrics.servicePerformance.map((service, index) => (
-              <div key={index}>
+            {metrics.servicePerformance.map((service) => (
+              <div key={service.id}>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-medium text-gray-900">{service.name}</span>
                   <span className="text-sm text-gray-600">
@@ -230,8 +230,8 @@ const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Desempenho por Profissional</h3>
           <div className="space-y-4">
-            {metrics.employeePerformance.map((employee, index) => (
-              <div key={index}>
+            {metrics.employeePerformance.map((employee) => (
+              <div key={employee.id}>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm font-medium text-gray-900">{employee.name}</span>
                   <span className="text-sm text-gray-600">

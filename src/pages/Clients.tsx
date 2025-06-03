@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, AlertCircle } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { supabase } from '../../lib/supabaseClient'; // Corrected path
+import { supabase } from '../lib/supabaseClient';
 import { Client } from '../../types'; // Corrected path
 import { formatDate } from '../utils/dateUtils'; // Assuming this is still relevant for other dates if any
 

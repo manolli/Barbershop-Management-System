@@ -4,7 +4,7 @@ import DashboardStats from '../components/dashboard/DashboardStats';
 import AppointmentsList from '../components/dashboard/AppointmentsList';
 import UpcomingAppointmentsChart from '../components/dashboard/UpcomingAppointmentsChart';
 import ServicePerformanceChart from '../components/dashboard/ServicePerformanceChart';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Appointment, Client, Employee, Service } from '../../types';
 import { formatDate } from '../utils/dateUtils';
 import { AlertCircle } from 'lucide-react';
