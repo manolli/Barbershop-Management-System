@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Calendar as CalendarIcon, AlertCircle, Edit, Trash2 } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Appointment, Client, Employee, Service } from '../../types'; // Ensure these types can handle nullable nested objects
 import { formatDateTime, formatDate } from '../utils/dateUtils'; // formatDateTime might need adjustment for string dates from Supabase
 
@@ -190,64 +190,61 @@ const Appointments: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredAppointments.map((appointment) => {
-                const client = mockClients.find(c => c.id === appointment.clientId);
-                const employee = mockEmployees.find(e => e.id === appointment.employeeId);
-                const service = mockServices.find(s => s.id === appointment.serviceId);
-
-                return (
+                {filteredAppointments.map((appointment) => (
                   <tr key={appointment.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {formatDateTime(new Date(appointment.date))}
+                        {formatDateTime(new Date(appointment.appointment_time))}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {client?.name}
+                        {appointment.clients?.name || 'N/A'}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {client?.phone}
+                        {appointment.clients?.phone || ''}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {employee?.name}
+                        {appointment.employees?.name || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {service?.name}
+                        {appointment.services?.name || 'N/A'}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {service?.duration} min
+                        {appointment.services?.duration_minutes ? `${appointment.services.duration_minutes} min` : ''}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        appointment.status === 'completed'
-                          ? 'bg-green-100 text-green-800'
-                          : appointment.status === 'cancelled'
-                          ? 'bg-red-100 text-red-800'
-                          : appointment.status === 'no-show'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {appointment.status === 'completed'
-                          ? 'Concluído'
-                          : appointment.status === 'cancelled'
-                          ? 'Cancelado'
-                          : appointment.status === 'no-show'
-                          ? 'Não Compareceu'
-                          : 'Agendado'}
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(appointment.status)}`}>
+                        {getStatusText(appointment.status)}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleEditAppointment(appointment)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                        title="Editar Agendamento"
+                      >
+                        <Edit className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAppointment(appointment.id)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Excluir Agendamento"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, AlertCircle } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Employee } from '../../types';
 
 const Employees: React.FC = () => {

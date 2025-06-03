@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, AlertCircle, Tag } from 'lucide-react';
 import MainLayout from '../components/layout/MainLayout';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { Service } from '../../types';
 // import { formatDate } from '../utils/dateUtils'; // Not used for service dates directly unless for created_at/updated_at
 
